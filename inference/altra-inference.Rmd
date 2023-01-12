@@ -212,7 +212,7 @@ data %>% select(-contains("Bacteria/")) %>% vis_miss() +
 <br>
 
 ### Subject Counts
-```{r}
+```{r, include=FALSE}
 # Subject counts by grouping
 # All samples
 subject_counts <- data %>% select(sample_id, ccp3_group) %>% 
@@ -228,8 +228,10 @@ stool_counts <- data %>% filter(sample_type_16S == "Stool") %>% select(sample_id
 sputum_counts <- data %>% filter(sample_type_16S == "Sputum") %>% select(sample_id, ccp3_group) %>% 
   select(ccp3_group) %>% table() %>% as.data.frame() %>%
   column_to_rownames(".") %>% dplyr::rename("Sputum" = "Freq") %>% t()
+```
 
-# Output table
+```{r}
+# Display subject count table
 rbind(subject_counts, stool_counts, sputum_counts) %>% knitr::kable()
 ```
 
@@ -257,30 +259,29 @@ plot_alpha_div(metadata, y="ShannonE.Median", title="Species Evenness")
 ```
 
 ### Community Compositions {.tabset .tabset-pills}
-Below are stacked bar charts showing community compositions. Bars are ordered by community similarity, as determined through hierarchical clustering (using Bray-Curtis distance). Squares at the top of each bar represent CCP group (see legend below). The top 15 taxa observed among all samples are included - rarer taxa are grouped into the "Other" group. Taxa that were did meet detection criteria (1e-4% relative abundance in at least 10% of samples) are not included, which is why not all stacked bar charts reach 100%.  
+Below are stacked bar charts showing community compositions. Bars are ordered by community similarity, as determined through hierarchical clustering (using Bray-Curtis distance). Squares at the top of each bar represent CCP group (see legend below). The top 15 taxa observed among all samples are included - rarer taxa are grouped into the "Other" group. Taxa that were did meet detection criteria (1e-4% relative abundance in at least 10% of samples) are not included, which is why not all stacked bar charts reach 100%.
 <br>
 
-![](/Users/bgraham/Github/altra/inference/ccp_label.png){#id .class width=20% height=5%}
+![](altra-inference_files/figure-gfm/ccp_label.png){#id .class width=20% height=5%}
 
 #### Stool, Species-Level  
 ```{r}
+# Filter parameters
 sample_type = "Stool"
 ccp3_groups = c("NegControl", "PosNonconverter", "PosConverter")
 
-# Select 
+# Filter data set and transform count -> compositional data
 ra.physeq <- physeq %>%
     microbiome::transform("compositional") %>%         # Transform to RA
     subset_samples(sample_type_16S == sample_type) %>% # Pick sample type
     subset_samples(ccp3_group %in% ccp3_groups) %>%    # Choose groups
     core(detection=1e-6, prevalence=0.10)              # Pick the core
-```
 
-```{r}
 # Display compositional barchart
 composition_barchart(ra.physeq=ra.physeq, marker_size=2)
 ```
 
-```{r}
+```{r, include=FALSE}
 # Set cluster and pheatmap data
 cluster.df <- ra.physeq %>% 
   otu_table(taxa_are_rows = TRUE) %>% t() %>% as.data.frame() %>% 
@@ -309,30 +310,31 @@ annotation_color = list(ccp3 = c(CCPminus = "gray10", CCPplus = "darkgoldenrod")
 
 ```{r}
 # Display pheatmap
-pheatmap(t(pheatmap.df), legend = F, color = viridis(100),
-         cluster_cols = cluster.df %>% vegdist(method = "bray") %>% hclust(method = "ward.D2"),
-         annotation = annotation, annotation_colors = annotation_color,
-         border_color = NA, cluster_rows = F, show_colnames = F)
+pheatmap(
+  t(pheatmap.df), legend = F, color = viridis(100),
+  cluster_cols = cluster.df %>% vegdist(method = "bray") %>% hclust(method = "ward.D2"),
+  annotation = annotation, annotation_colors = annotation_color,
+  border_color = NA, cluster_rows = F, show_colnames = F)
 ```
 
 #### Sputum, Species-Level  
 ```{r}
+# Filter parameters
 sample_type = "Sputum"
 ccp3_groups = c("NegControl", "PosNonconverter", "PosConverter", "PosRA")
 
+# Filter data set and transform count -> compositional data
 ra.physeq <- physeq %>%
     microbiome::transform("compositional") %>%         # Transform to RA
     subset_samples(sample_type_16S == sample_type) %>% # Pick sample type
     subset_samples(ccp3_group %in% ccp3_groups) %>%    # Choose groups
-    core(detection=1e-6, prevalence=0.10)           # Pick the core
-```
+    core(detection=1e-6, prevalence=0.10)              # Pick the core
 
-```{r}
 # Display compositional barchart
 composition_barchart(ra.physeq=ra.physeq, marker_size=2.8)
 ```
 
-```{r}
+```{r, include=FALSE}
 # Set cluster and pheatmap data
 cluster.df <- ra.physeq %>% 
   otu_table(taxa_are_rows = TRUE) %>% t() %>% as.data.frame() %>% 
@@ -369,15 +371,12 @@ pheatmap(
 ```
 
 <br>
-<br>
 
 ## Inference  
 
-### Hypothesis 1
-#### CCP(+) vs CCP(-)  
-*There are microbiome differences between groups suggesting relationships between ‘autoimmune states’.*  
-<br>
-For this section, we will consider CCP(+) individuals as those individuals who are CCP(+) but do not have RA (both CCPPosNonconverters and CCPPosConverters). We will compare this group to the CCP(-) (NegControl) group.  
+### Hypothesis 1: CCP(+) vs CCP(-)  
+*There are microbiome differences between CCP(+) and CCP(-) groups suggesting relationships between ‘autoimmune states’.*  
+For this section, we will consider CCP(+) individuals as those individuals who are CCP(+) but do not have RA (both CCP(+) converters and non-converters). We will compare this group to the CCP(-) group, or the negative control group.  
 <br>
 
 #### Stool {.tabset .tabset-pills}
@@ -386,12 +385,9 @@ For this section, we will consider CCP(+) individuals as those individuals who a
 sample_type = "Stool"
 pseq <- physeq %>% 
   subset_samples(sample_type_16S == sample_type) %>%
-  subset_samples(ccp3_group != "PosRA") #%>%
-  #tax_glom(taxrank="Genus") %>%
+  subset_samples(ccp3_group != "PosRA")
   
-pseq.rel <- pseq %>% 
-  microbiome::transform("compositional") #%>%
-  #core(detection = 0.01, prevalence = 0.50)
+pseq.rel <- pseq %>% microbiome::transform("compositional")
 otu <- abundances(pseq.rel) %>% t() %>% as.data.frame()
 meta <- meta(pseq.rel) %>% mutate(ccp3 = factor(ccp3, levels = c(0, 1), labels = c("-", "+")))
 ```
