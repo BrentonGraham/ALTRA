@@ -1,24 +1,13 @@
----
-title: "ALTRA Microbiome Analysis"
-output:
-  html_document:
-    keep_md: true
-    toc: true
-    toc_float: true
-    code_folding: hide
----
+
+# ALTRA Microbiome Analysis
 
 <br>
 
-
-
-
 ## Introduction
 
+## The Data
 
-## The Data  
-
-```r
+``` r
 # Import data
 data <- paste(getwd(), "/../data/ALTRA_clinical&16S.merged.19-Dec-2022.analysis_samples.csv", sep="") %>% 
   read_delim(delim = ",") %>%
@@ -46,9 +35,10 @@ tax_table <- plyr::ldply(otu_tax_split, rbind)[-1] %>%
 physeq <- phyloseq(otu_table(otu_table), tax_table(tax_table), sample_data(metadata))
 ```
 
-### Missing Data  
+### Missing Data
 
-```r
+``` r
+# Visualize missingness
 data %>% select(-contains("Bacteria/")) %>% vis_miss() +
   scale_fill_manual(values = c("gray15", "darkgoldenrod")) +
   theme_bw() +
@@ -56,201 +46,109 @@ data %>% select(-contains("Bacteria/")) %>% vis_miss() +
   guides(fill = guide_legend(title = "Missing"))
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-3-1.png)<!-- -->
-<br>
+![](altra-inference_files/figure-gfm/unnamed-chunk-3-1.png)<!-- --> <br>
 <br>
 
 ### Subject Counts
 
-```r
-# Subject counts by grouping - matches up with what is reported by Kevin Deane's team
+``` r
+# Subject counts by grouping
+# All samples
 subject_counts <- data %>% select(sample_id, ccp3_group) %>% 
   unique() %>% select(ccp3_group) %>% table() %>% as.data.frame() %>%
   column_to_rownames(".") %>% dplyr::rename("All Subjects" = "Freq") %>% t()
 
+# Stool samples
 stool_counts <- data %>% filter(sample_type_16S == "Stool") %>% select(sample_id, ccp3_group) %>% 
   select(ccp3_group) %>% table() %>% as.data.frame() %>%
   column_to_rownames(".") %>% dplyr::rename("Stool" = "Freq") %>% t()
 
+# Sputum samples
 sputum_counts <- data %>% filter(sample_type_16S == "Sputum") %>% select(sample_id, ccp3_group) %>% 
   select(ccp3_group) %>% table() %>% as.data.frame() %>%
   column_to_rownames(".") %>% dplyr::rename("Sputum" = "Freq") %>% t()
 
+# Output table
 rbind(subject_counts, stool_counts, sputum_counts) %>% knitr::kable()
 ```
 
+|              | NegControl | PosConverter | PosNonconverter | PosRA |
+|:-------------|-----------:|-------------:|----------------:|------:|
+| All Subjects |         32 |           14 |              40 |     5 |
+| Stool        |         32 |           14 |              40 |     5 |
+| Sputum       |         19 |            8 |              38 |     2 |
 
-
-|             | NegControl| PosConverter| PosNonconverter| PosRA|
-|:------------|----------:|------------:|---------------:|-----:|
-|All Subjects |         32|           14|              40|     5|
-|Stool        |         32|           14|              40|     5|
-|Sputum       |         19|            8|              38|     2|
-
-### Table 1 {.tabset .tabset-pills}
-#### Stool
-
-```r
-# Table 1 (source: https://cran.r-project.org/web/packages/tableone/vignettes/introduction.html)
-vars <- c("age", "gender", "race", "bmi", "ever_smoke")
-cat_vars <- c("gender", "race", "ever_smoke")
-table1 <- CreateTableOne(
-  vars = vars, factorVars = cat_vars, strata = c("ccp3_group"), data = data %>% filter(sample_type_16S == "Stool"))
-print(table1, print = F, nonnormal = T, minMax = F, contDigits=0) %>% 
-  as.data.frame() %>% 
-  select(-test, -p) %>%
-  knitr::kable(booktabs = T, align = "ccccc")
-```
-
-
-
-|                   | NegControl  | PosConverter | PosNonconverter |    PosRA    |
-|:------------------|:-----------:|:------------:|:---------------:|:-----------:|
-|n                  |     32      |      14      |       40        |      5      |
-|age (median [IQR]) | 49 [36, 60] | 56 [46, 65]  |   66 [50, 73]   | 57 [51, 59] |
-|gender = Male (%)  |  12 (37.5)  |   2 (14.3)   |    11 (27.5)    |  0 ( 0.0)   |
-|race (%)           |             |              |                 |             |
-|Asian              |  0 ( 0.0)   |   0 ( 0.0)   |    1 ( 2.5)     |  0 ( 0.0)   |
-|Biracial           |  1 ( 3.1)   |   0 ( 0.0)   |    0 ( 0.0)     |  0 ( 0.0)   |
-|Biracial, Hispanic |  0 ( 0.0)   |   0 ( 0.0)   |    1 ( 2.5)     |  0 ( 0.0)   |
-|Black              |  1 ( 3.1)   |   3 (21.4)   |    3 ( 7.5)     |  0 ( 0.0)   |
-|Hispanic           |  2 ( 6.2)   |   4 (28.6)   |    1 ( 2.5)     |  1 (20.0)   |
-|NHW                |  27 (84.4)  |   7 (50.0)   |    34 (85.0)    |  4 (80.0)   |
-|White, Hispanic    |  1 ( 3.1)   |   0 ( 0.0)   |    0 ( 0.0)     |  0 ( 0.0)   |
-|bmi (median [IQR]) | 26 [23, 30] | 28 [24, 33]  |   27 [23, 29]   | 26 [25, 26] |
-|ever_smoke = 1 (%) |  7 (23.3)   |   4 (28.6)   |    14 (35.0)    |  2 (40.0)   |
-
-#### Sputum
-
-```r
-# Table 1 (source: https://cran.r-project.org/web/packages/tableone/vignettes/introduction.html)
-vars <- c("age", "gender", "race", "bmi", "ever_smoke")
-cat_vars <- c("gender", "race", "ever_smoke")
-table1 <- CreateTableOne(
-  vars = vars, factorVars = cat_vars, strata = c("ccp3_group"), data = data %>% filter(sample_type_16S == "Sputum"))
-print(table1, print = F, nonnormal = T, minMax = F, contDigits=0) %>% 
-  as.data.frame() %>% 
-  select(-test, -p) %>%
-  knitr::kable(booktabs = T, align = "ccccc")
-```
-
-
-
-|                   | NegControl  | PosConverter | PosNonconverter |    PosRA    |
-|:------------------|:-----------:|:------------:|:---------------:|:-----------:|
-|n                  |     19      |      8       |       38        |      2      |
-|age (median [IQR]) | 46 [34, 55] | 60 [47, 69]  |   66 [51, 73]   | 67 [63, 71] |
-|gender = Male (%)  |  6 (31.6)   |   2 (25.0)   |    11 (28.9)    |  0 (  0.0)  |
-|race (%)           |             |              |                 |             |
-|Asian              |  0 ( 0.0)   |   0 ( 0.0)   |    1 ( 2.6)     |  0 (  0.0)  |
-|Biracial, Hispanic |  0 ( 0.0)   |   0 ( 0.0)   |    1 ( 2.6)     |  0 (  0.0)  |
-|Black              |  1 ( 5.3)   |   2 (25.0)   |    3 ( 7.9)     |  0 (  0.0)  |
-|Hispanic           |  1 ( 5.3)   |   1 (12.5)   |    1 ( 2.6)     |  0 (  0.0)  |
-|NHW                |  16 (84.2)  |   5 (62.5)   |    32 (84.2)    |  2 (100.0)  |
-|White, Hispanic    |  1 ( 5.3)   |   0 ( 0.0)   |    0 ( 0.0)     |  0 (  0.0)  |
-|bmi (median [IQR]) | 26 [24, 31] | 28 [22, 31]  |   27 [23, 29]   | 32 [29, 35] |
-|ever_smoke = 1 (%) |  3 (15.8)   |   2 (25.0)   |    14 (36.8)    |  0 (  0.0)  |
-
-### {-}
-
-<br>
-<br>
+<br> <br>
 
 ## EDA
-### Alpha Diversity by CCP-Group {.tabset .tabset-pills}
-The violin/boxplots below show the distributions of various alpha diversity measurements, stratified by CCP-group and sample type.  
+
+### Alpha Diversity by CCP-Group
+
+The violin/boxplots below show the distributions of various alpha
+diversity measurements, stratified by CCP-group and sample type.  
 <br>
 
 #### Shannon Diversity
 
-```r
-# Shannon diversity plot
-metadata %>%
-  mutate(group_sampletype = paste(ccp3_group, sample_type_16S, sep = "_")) %>%
-  ggplot(aes(x=sample_type_16S, y=ShannonH.Median)) +
-  geom_violin(aes(fill = group_sampletype), color = "gray5", lwd = 0.6) +
-  facet_grid(cols=vars(ccp3_group)) +
-  geom_boxplot(width = 0.1, fill = "white", color = "gray5") +
-  geom_line(aes(group = sample_id), alpha = 0.5) +
-  ggtitle("Shannon Diversity") +
-  labs(x = "", y = "Shannon Diversity") +
-  theme_bw() +
-  scale_fill_brewer(palette = "Paired") +
-  theme(plot.title = element_text(hjust=0.5),
-        legend.position = "none")
+``` r
+plot_alpha_div(metadata, y="ShannonH.Median", title="Shannon Diversity")
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
 #### Species Richness
 
-```r
-# Species richness
-metadata %>%
-  mutate(group_sampletype = paste(ccp3_group, sample_type_16S, sep = "_")) %>%
-  ggplot(aes(x=sample_type_16S, y=Sobs.Median)) +
-  geom_violin(aes(fill = group_sampletype), color = "gray5", lwd = 0.6) +
-  facet_grid(cols=vars(ccp3_group)) +
-  geom_boxplot(width = 0.1, fill = "white", color = "gray5") +
-  geom_line(aes(group = sample_id), alpha = 0.5) +
-  ggtitle("Species Richness") +
-  labs(x = "", y = "Species Richness") +
-  theme_bw() +
-  scale_fill_brewer(palette = "Paired") +
-  theme(plot.title = element_text(hjust=0.5),
-        legend.position = "none")
+``` r
+plot_alpha_div(metadata, y="Sobs.Median", title="Species Richness")
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
 
 #### Species Evenness
 
-```r
-# Species evenness
-metadata %>%
-  mutate(group_sampletype = paste(ccp3_group, sample_type_16S, sep = "_")) %>%
-  ggplot(aes(x=sample_type_16S, y=ShannonE.Median)) +
-  geom_violin(aes(fill = group_sampletype), color = "gray5", lwd = 0.6) +
-  facet_grid(cols=vars(ccp3_group)) +
-  geom_boxplot(width = 0.1, fill = "white", color = "gray5") +
-  geom_line(aes(group = sample_id), alpha = 0.5) +
-  ggtitle("Species Evenness") +
-  labs(x = "", y = "Species Evenness") +
-  theme_bw() +
-  scale_fill_brewer(palette = "Paired") +
-  theme(plot.title = element_text(hjust=0.5),
-        legend.position = "none")
+``` r
+plot_alpha_div(metadata, y="ShannonE.Median", title="Species Evenness")
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
-### Community Compositions {.tabset .tabset-pills}
-Below are stacked bar charts showing community compositions. Bars are ordered by community similarity, as determined through hierarchical clustering (using Bray-Curtis distance). Squares at the top of each bar represent CCP group (see legend below). The top 15 taxa observed among all samples are included - rarer taxa are grouped into the "Other" group. Taxa that were did meet detection criteria (1e-4% relative abundance in at least 10% of samples) are not included, which is why not all stacked bar charts reach 100%.  
+### Community Compositions
+
+Below are stacked bar charts showing community compositions. Bars are
+ordered by community similarity, as determined through hierarchical
+clustering (using Bray-Curtis distance). Squares at the top of each bar
+represent CCP group (see legend below). The top 15 taxa observed among
+all samples are included - rarer taxa are grouped into the “Other”
+group. Taxa that were did meet detection criteria (1e-4% relative
+abundance in at least 10% of samples) are not included, which is why not
+all stacked bar charts reach 100%.  
 <br>
 
-![](/Users/bgraham/Github/altra/inference/ccp_label.png){#id .class width=20% height=5%}
+<img src="/Users/bgraham/Github/altra/inference/ccp_label.png" id="id"
+class="class" style="width:20.0%;height:5.0%" />
 
+#### Stool, Species-Level
 
-
-#### Stool, Species-Level  
-
-```r
+``` r
 sample_type = "Stool"
 ccp3_groups = c("NegControl", "PosNonconverter", "PosConverter")
 
+# Select 
 ra.physeq <- physeq %>%
     microbiome::transform("compositional") %>%         # Transform to RA
     subset_samples(sample_type_16S == sample_type) %>% # Pick sample type
     subset_samples(ccp3_group %in% ccp3_groups) %>%    # Choose groups
     core(detection=1e-6, prevalence=0.10)              # Pick the core
+```
 
+``` r
+# Display compositional barchart
 composition_barchart(ra.physeq=ra.physeq, marker_size=2)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-11-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
 
-
-```r
+``` r
 # Set cluster and pheatmap data
 cluster.df <- ra.physeq %>% 
   otu_table(taxa_are_rows = TRUE) %>% t() %>% as.data.frame() %>% 
@@ -264,27 +162,32 @@ pheatmap.df <- core.physeq %>%
 
 # Pheatmap annotations
 annotation <- ra.physeq %>% sample_data() %>% as_tibble() %>% as.data.frame() %>%
-  select(ccp3, contains("95_pos")) %>%
-  mutate(sp_rf_ig_m_95_pos = ifelse(sp_rf_ig_m_95_pos == 0, "Negative", "Positive"),
-         sp_rf_ig_a_95_pos = ifelse(sp_rf_ig_a_95_pos == 0, "Negative", "Positive"),
-         sp_ccp_ig_a_95_pos = ifelse(sp_ccp_ig_a_95_pos == 0, "Negative", "Positive"),
-         sp_ccp_ig_g_95_pos = ifelse(sp_ccp_ig_g_95_pos == 0, "Negative", "Positive")) %>%
+  select(CCP = ccp3, contains("95_pos")) %>%
+  mutate(
+    CCP = ifelse(CCP == 0, "-", "+"),
+    sp_rf_ig_m_95_pos = ifelse(sp_rf_ig_m_95_pos == 0, "-", "+"),
+    sp_rf_ig_a_95_pos = ifelse(sp_rf_ig_a_95_pos == 0, "-", "+"),
+    sp_ccp_ig_a_95_pos = ifelse(sp_ccp_ig_a_95_pos == 0, "-", "+"),
+    sp_ccp_ig_g_95_pos = ifelse(sp_ccp_ig_g_95_pos == 0, "-", "+")) %>%
   set_rownames(colnames(t(pheatmap.df)))
 
+# Set colors
 annotation_color = list(ccp3 = c(CCPminus = "gray10", CCPplus = "darkgoldenrod"))
+```
 
-# Separately displaying dendrogram
+``` r
+# Display pheatmap
 pheatmap(t(pheatmap.df), legend = F, color = viridis(100),
          cluster_cols = cluster.df %>% vegdist(method = "bray") %>% hclust(method = "ward.D2"),
          annotation = annotation, annotation_colors = annotation_color,
          border_color = NA, cluster_rows = F, show_colnames = F)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-12-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
 
-#### Sputum, Species-Level  
+#### Sputum, Species-Level
 
-```r
+``` r
 sample_type = "Sputum"
 ccp3_groups = c("NegControl", "PosNonconverter", "PosConverter", "PosRA")
 
@@ -293,61 +196,72 @@ ra.physeq <- physeq %>%
     subset_samples(sample_type_16S == sample_type) %>% # Pick sample type
     subset_samples(ccp3_group %in% ccp3_groups) %>%    # Choose groups
     core(detection=1e-6, prevalence=0.10)           # Pick the core
-      
+```
+
+``` r
+# Display compositional barchart
 composition_barchart(ra.physeq=ra.physeq, marker_size=2.8)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-13-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
-
-```r
+``` r
 # Set cluster and pheatmap data
 cluster.df <- ra.physeq %>% 
   otu_table(taxa_are_rows = TRUE) %>% t() %>% as.data.frame() %>% 
   set_colnames(abbrev_taxa(ra.physeq))
 
+# Create pheatmap
 core.physeq <- ra.physeq %>% core(detection=1/100, prevalence=25/100)
 pheatmap.df <- core.physeq %>%
   otu_table() %>% t() %>% as.data.frame() %>%
   set_colnames(abbrev_taxa(core.physeq))
 
-# pheatmap annotations
+# # Pheatmap annotations
 annotation <- ra.physeq %>% sample_data() %>% as_tibble() %>% as.data.frame() %>%
-  select(ccp3, contains("95_pos")) %>%
-  mutate(sp_rf_ig_m_95_pos = ifelse(sp_rf_ig_m_95_pos == 0, "Negative", "Positive"),
-         sp_rf_ig_a_95_pos = ifelse(sp_rf_ig_a_95_pos == 0, "Negative", "Positive"),
-         sp_ccp_ig_a_95_pos = ifelse(sp_ccp_ig_a_95_pos == 0, "Negative", "Positive"),
-         sp_ccp_ig_g_95_pos = ifelse(sp_ccp_ig_g_95_pos == 0, "Negative", "Positive")) %>%
+  select(CCP = ccp3, contains("95_pos")) %>%
+  mutate(
+    CCP = ifelse(CCP == 0, "-", "+"),
+    sp_rf_ig_m_95_pos = ifelse(sp_rf_ig_m_95_pos == 0, "-", "+"),
+    sp_rf_ig_a_95_pos = ifelse(sp_rf_ig_a_95_pos == 0, "-", "+"),
+    sp_ccp_ig_a_95_pos = ifelse(sp_ccp_ig_a_95_pos == 0, "-", "+"),
+    sp_ccp_ig_g_95_pos = ifelse(sp_ccp_ig_g_95_pos == 0, "-", "+")) %>%
   set_rownames(colnames(t(pheatmap.df)))
 
-annotation_color = list(
-    ccp3 = c(CCPminus = "gray10", CCPplus = "darkgoldenrod"))
-
-# Separately displaying dendrogram
-pheatmap(t(pheatmap.df), legend = F, color = viridis(100),
-         cluster_cols = cluster.df %>% vegdist(method = "bray") %>% hclust(method = "ward.D2"),
-         annotation = annotation, annotation_colors = annotation_color,
-         border_color = NA, cluster_rows = F, show_colnames = F)
+# Set colors
+annotation_color = list(ccp3 = c(CCPminus = "gray10", CCPplus = "darkgoldenrod"))
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
+``` r
+# Display pheatmap
+pheatmap(
+  t(pheatmap.df), legend = F, color = viridis(100),
+  cluster_cols = cluster.df %>% vegdist(method = "bray") %>% hclust(method = "ward.D2"),
+  annotation = annotation, annotation_colors = annotation_color,
+  border_color = NA, cluster_rows = F, show_colnames = F)
+```
 
-### {-}
-<br>
-<br>
+![](altra-inference_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
-## Inference  
+<br> <br>
+
+## Inference
 
 ### Hypothesis 1
-#### CCP(+) vs CCP(-)  
-*There are microbiome differences between groups suggesting relationships between ‘autoimmune states’.*  
-<br>
-For this section, we will consider CCP(+) individuals as those individuals who are CCP(+) but do not have RA (both CCPPosNonconverters and CCPPosConverters). We will compare this group to the CCP(-) (NegControl) group.  
+
+#### CCP(+) vs CCP(-)
+
+*There are microbiome differences between groups suggesting
+relationships between ‘autoimmune states’.*  
+<br> For this section, we will consider CCP(+) individuals as those
+individuals who are CCP(+) but do not have RA (both CCPPosNonconverters
+and CCPPosConverters). We will compare this group to the CCP(-)
+(NegControl) group.  
 <br>
 
-#### Stool {.tabset .tabset-pills}
+#### Stool
 
-```r
+``` r
 # Pick relative abundances (compositional) and sample metadata
 sample_type = "Stool"
 pseq <- physeq %>% 
@@ -362,9 +276,9 @@ otu <- abundances(pseq.rel) %>% t() %>% as.data.frame()
 meta <- meta(pseq.rel) %>% mutate(ccp3 = factor(ccp3, levels = c(0, 1), labels = c("-", "+")))
 ```
 
-##### Alpha Diversity  
+##### Alpha Diversity
 
-```r
+``` r
 # Shannon diversity plot
 shannon <- meta %>%
   ggplot(aes(x=ccp3, y=ShannonH.Median)) +
@@ -417,9 +331,9 @@ evenness <- meta %>%
 ggarrange(shannon, sobs, evenness, ncol = 3, nrow = 1)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-16-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->
 
-```r
+``` r
 # Perform tests
 shan.stat.test <- wilcox.exact(ShannonH.Median ~ ccp3, data=meta, paired=F)
 rich.stat.test <- wilcox.exact(Sobs.Median ~ ccp3, data=meta, paired=F)
@@ -435,17 +349,15 @@ data.frame(
   knitr::kable()
 ```
 
-
-
-|Measurement       |p.val    |
-|:-----------------|:--------|
-|Shannon Diversity |p = 0.98 |
-|Species Richness  |p = 0.15 |
-|Species Evenness  |p = 0.66 |
+| Measurement       | p.val    |
+|:------------------|:---------|
+| Shannon Diversity | p = 0.98 |
+| Species Richness  | p = 0.15 |
+| Species Evenness  | p = 0.66 |
 
 ##### PCoA
 
-```r
+``` r
 # Need core taxa to save time
 pcoa_otu <- pseq %>% 
   microbiome::transform("compositional") %>%
@@ -496,9 +408,9 @@ pcoa_plot_df %>%
   theme(text = element_text(size = 12))
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-17-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
-```r
+``` r
 # Ordination bi-plot - color differently
 pcoa_plot_df %>%
   ggplot(aes(x = Dim1, y = Dim2, color = ccp3_group)) +
@@ -517,11 +429,11 @@ pcoa_plot_df %>%
   theme(text = element_text(size = 12))
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-17-2.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-18-2.png)<!-- -->
 
 ##### PERMANOVA
 
-```r
+``` r
 # PERMANOVA test using Bray-Curtis distance
 set.seed(007) # Set seed for reproducibility - permutation-based test
 permanova <- adonis2(
@@ -535,51 +447,50 @@ permanova %>% as.data.frame() %>%
   knitr::kable(align = 'ccccc')
 ```
 
-
-
-|         | Df | SumOfSqs |  R2  |  F   |    p.val    |
-|:--------|:--:|:--------:|:----:|:----:|:-----------:|
-|ccp3     | 1  |   0.37   | 0.06 | 4.88 | **0.001**** |
-|age      | 1  |   0.08   | 0.01 | 1.04 |    0.375    |
-|gender   | 1  |   0.12   | 0.02 | 1.55 |    0.104    |
-|race     | 6  |   0.34   | 0.05 | 0.75 |    0.833    |
-|Residual | 76 |   5.74   | 0.86 |  NA  |     NA      |
-|Total    | 85 |   6.70   | 1.00 |  NA  |     NA      |
+|          | Df  | SumOfSqs |  R2  |  F   |     p.val     |
+|:---------|:---:|:--------:|:----:|:----:|:-------------:|
+| ccp3     |  1  |   0.37   | 0.06 | 4.88 | **0.001**\*\* |
+| age      |  1  |   0.08   | 0.01 | 1.04 |     0.375     |
+| gender   |  1  |   0.12   | 0.02 | 1.55 |     0.104     |
+| race     |  6  |   0.34   | 0.05 | 0.75 |     0.833     |
+| Residual | 76  |   5.74   | 0.86 |  NA  |      NA       |
+| Total    | 85  |   6.70   | 1.00 |  NA  |      NA       |
 
 **Dispersions Plot**
 
-```r
+``` r
 # Plot dispersion distances for each "group"
 beta_dispersion <- otu %>% vegdist(method = "bray") %>% betadisper(meta$ccp3)
 plot(beta_dispersion, hull=FALSE, ellipse=TRUE)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-19-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
 
 **Homogeneity of Dispersons**
 
-```r
+``` r
 # Hypothesis test
 set.seed(007)
 otu %>% vegdist() %>% betadisper(meta$ccp3) %>% permutest()
 ```
 
-```
-## 
-## Permutation test for homogeneity of multivariate dispersions
-## Permutation: free
-## Number of permutations: 999
-## 
-## Response: Distances
-##           Df  Sum Sq   Mean Sq      F N.Perm Pr(>F)
-## Groups     1 0.00083 0.0008345 0.1086    999  0.764
-## Residuals 84 0.64537 0.0076830
-```
+    ## 
+    ## Permutation test for homogeneity of multivariate dispersions
+    ## Permutation: free
+    ## Number of permutations: 999
+    ## 
+    ## Response: Distances
+    ##           Df  Sum Sq   Mean Sq      F N.Perm Pr(>F)
+    ## Groups     1 0.00083 0.0008345 0.1086    999  0.764
+    ## Residuals 84 0.64537 0.0076830
 
-##### Differential Abundance Analysis  
-The model reports "ccp3_CCPplus_vs_CCPminus", which should indicate that the **CCPminus group is the reference**. An $\alpha$-level of 0.05 is used as the threshold for selecting taxa.  
+##### Differential Abundance Analysis
 
-```r
+The model reports “ccp3_CCPplus_vs_CCPminus”, which should indicate that
+the **CCPminus group is the reference**. An $\alpha$-level of 0.05 is
+used as the threshold for selecting taxa.
+
+``` r
 # Convert physeq object to deseq and fit model
 deseq <- phyloseq_to_deseq2(pseq, ~ ccp3) # Convert physeq object to deseq
 fit <- DESeq2::DESeq(deseq, test="Wald", fitType="parametric") # Fit model
@@ -621,22 +532,20 @@ sig_taxa.df %>%
   arrange(Taxa, ccp3) %>% knitr::kable()
 ```
 
+| ccp3 | Taxa                  | Median.RA |    IQR |
+|:-----|:----------------------|----------:|-------:|
+| \-   | Peptostreptococcaceae |     3.889 |  5.686 |
+| \+   | Peptostreptococcaceae |     1.016 |  2.908 |
+| \-   | Coriobacteriaceae     |     0.474 |  0.784 |
+| \+   | Coriobacteriaceae     |     0.469 |  0.475 |
+| \-   | Blautia               |    17.429 | 15.685 |
+| \+   | Blautia               |    18.102 | 10.125 |
+| \-   | Bacteroidales         |     0.028 |  0.115 |
+| \+   | Bacteroidales         |     0.140 |  0.830 |
+| \-   | Bacteroides           |     0.245 |  0.843 |
+| \+   | Bacteroides           |     2.797 |  7.502 |
 
-
-|ccp3 |Taxa                  | Median.RA|    IQR|
-|:----|:---------------------|---------:|------:|
-|-    |Peptostreptococcaceae |     3.889|  5.686|
-|+    |Peptostreptococcaceae |     1.016|  2.908|
-|-    |Coriobacteriaceae     |     0.474|  0.784|
-|+    |Coriobacteriaceae     |     0.469|  0.475|
-|-    |Blautia               |    17.429| 15.685|
-|+    |Blautia               |    18.102| 10.125|
-|-    |Bacteroidales         |     0.028|  0.115|
-|+    |Bacteroidales         |     0.140|  0.830|
-|-    |Bacteroides           |     0.245|  0.843|
-|+    |Bacteroides           |     2.797|  7.502|
-
-```r
+``` r
 results %>%
   filter(Row.names %in% filtered_sig_taxa) %>%
   ggplot(aes(x = short_name, y = log2FoldChange, fill = Phylum)) +
@@ -648,10 +557,9 @@ results %>%
   theme(axis.title.y = element_blank())
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-21-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
 
-
-```r
+``` r
 # maaslin2.ccp <- Maaslin2(
 #   input_data = otu, 
 #   input_metadata = meta, 
@@ -659,13 +567,13 @@ results %>%
 #   fixed_effects = c("ccp3"))
 ```
 
-#### {-} 
+#### 
 
 <br>
 
-#### Sputum {.tabset .tabset-pills}
+#### Sputum
 
-```r
+``` r
 # Pick relative abundances (compositional) and sample metadata
 sample_type = "Sputum"
 pseq <- physeq %>% 
@@ -681,9 +589,9 @@ otu <- abundances(pseq.rel) %>% t() %>% as.data.frame()
 meta <- meta(pseq.rel) %>% mutate(ccp3 = factor(ccp3, levels = c(0, 1), labels = c("-", "+")))
 ```
 
-##### Alpha Diversity  
+##### Alpha Diversity
 
-```r
+``` r
 # Shannon diversity plot
 shannon <- meta %>%
   ggplot(aes(x=ccp3, y=ShannonH.Median)) +
@@ -736,9 +644,9 @@ evenness <- meta %>%
 ggarrange(shannon, sobs, evenness, ncol = 3, nrow = 1)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-24-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
 
-```r
+``` r
 # Perform tests
 shan.stat.test <- wilcox.exact(ShannonH.Median ~ ccp3, data=meta, paired=F)
 rich.stat.test <- wilcox.exact(Sobs.Median ~ ccp3, data=meta, paired=F)
@@ -754,17 +662,15 @@ data.frame(
   knitr::kable()
 ```
 
-
-
-|Measurement       |p.val    |
-|:-----------------|:--------|
-|Shannon Diversity |p = 0.05 |
-|Species Richness  |p = 0.12 |
-|Species Evenness  |p = 0.08 |
+| Measurement       | p.val    |
+|:------------------|:---------|
+| Shannon Diversity | p = 0.05 |
+| Species Richness  | p = 0.12 |
+| Species Evenness  | p = 0.08 |
 
 ##### PCoA
 
-```r
+``` r
 # Need core taxa to save time
 pcoa_otu <- pseq %>% 
   microbiome::transform("compositional") %>%
@@ -812,12 +718,17 @@ pcoa_plot_df %>%
   theme(text = element_text(size = 12))
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-25-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
 
 ##### PERMANOVA
-**Homogeneity of dispersions assumption not met!** We should therefore not report the p-value here and should opt for another test. Looking at the dispersion plots, nonetheless, shows us that there is not a significance in community composition between groups (even if we were to use another test). 
 
-```r
+**Homogeneity of dispersions assumption not met!** We should therefore
+not report the p-value here and should opt for another test. Looking at
+the dispersion plots, nonetheless, shows us that there is not a
+significance in community composition between groups (even if we were to
+use another test).
+
+``` r
 # PERMANOVA test using Bray-Curtis distance
 set.seed(007) # Set seed for reproducibility - permutation-based test
 permanova <- adonis2(otu ~ ccp3 + age + gender + race, data = meta, 
@@ -831,65 +742,64 @@ permanova %>% as.data.frame() %>%
   knitr::kable(align = 'ccccc')
 ```
 
-
-
-|         | Df | SumOfSqs |  R2  |  F   | p.val |
-|:--------|:--:|:--------:|:----:|:----:|:-----:|
-|ccp3     | 1  |   0.16   | 0.02 | 1.25 | 0.22  |
-|age      | 1  |   0.19   | 0.02 | 1.49 | 0.14  |
-|gender   | 1  |   0.20   | 0.02 | 1.54 | 0.11  |
-|race     | 5  |   0.62   | 0.07 | 0.97 | 0.53  |
-|Residual | 56 |   7.20   | 0.87 |  NA  |  NA   |
-|Total    | 64 |   8.24   | 1.00 |  NA  |  NA   |
+|          | Df  | SumOfSqs |  R2  |  F   | p.val |
+|:---------|:---:|:--------:|:----:|:----:|:-----:|
+| ccp3     |  1  |   0.16   | 0.02 | 1.25 | 0.22  |
+| age      |  1  |   0.19   | 0.02 | 1.49 | 0.14  |
+| gender   |  1  |   0.20   | 0.02 | 1.54 | 0.11  |
+| race     |  5  |   0.62   | 0.07 | 0.97 | 0.53  |
+| Residual | 56  |   7.20   | 0.87 |  NA  |  NA   |
+| Total    | 64  |   8.24   | 1.00 |  NA  |  NA   |
 
 **Dispersions Plot**
 
-```r
+``` r
 # Plot dispersion distances for each "group"
 beta_dispersion <- otu %>% vegdist(method = "bray") %>% betadisper(meta$ccp3)
 plot(beta_dispersion, hull=FALSE, ellipse=TRUE)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-27-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-28-1.png)<!-- -->
 
 **Homogeneity of Dispersons**
 
-```r
+``` r
 # Hypothesis test
 set.seed(007)
 otu %>% vegdist() %>% betadisper(meta$ccp3) %>% permutest()
 ```
 
-```
-## 
-## Permutation test for homogeneity of multivariate dispersions
-## Permutation: free
-## Number of permutations: 999
-## 
-## Response: Distances
-##           Df Sum Sq Mean Sq    F N.Perm Pr(>F)  
-## Groups     1  0.043  0.0433 4.18    999  0.047 *
-## Residuals 63  0.653  0.0104                     
-## ---
-## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-```
+    ## 
+    ## Permutation test for homogeneity of multivariate dispersions
+    ## Permutation: free
+    ## Number of permutations: 999
+    ## 
+    ## Response: Distances
+    ##           Df Sum Sq Mean Sq    F N.Perm Pr(>F)  
+    ## Groups     1  0.043  0.0433 4.18    999  0.047 *
+    ## Residuals 63  0.653  0.0104                     
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 
-#### {-}  
+#### 
 
-<br>
-<br>
+<br> <br>
 
 ### Hypothesis 2
+
 #### CCP(+) Nonconverters vs Converters
-*There are microbiome differences between CCP+ subjects who do and do not go on to develop clinical RA.*  
-<br>
-For this section, we will compare CCP(+)-Nonconverters and CCP(+)-Converters. We are testing the hypothesis that certain microbiota associated with ‘real’ development of future RA.  
+
+*There are microbiome differences between CCP+ subjects who do and do
+not go on to develop clinical RA.*  
+<br> For this section, we will compare CCP(+)-Nonconverters and
+CCP(+)-Converters. We are testing the hypothesis that certain microbiota
+associated with ‘real’ development of future RA.
 
 <br>
 
-#### Stool {.tabset .tabset-pills}
+#### Stool
 
-```r
+``` r
 # Pick relative abundances (compositional) and sample metadata
 sample_type = "Stool"
 pseq <- physeq %>% 
@@ -902,9 +812,9 @@ otu <- abundances(pseq.rel) %>% t() %>% as.data.frame()
 meta <- meta(pseq.rel) %>% mutate(ccp3 = factor(ccp3, levels = c(0, 1), labels = c("-", "+")))
 ```
 
-##### Alpha Diversity  
+##### Alpha Diversity
 
-```r
+``` r
 # Shannon diversity plot
 shannon <- meta %>%
   ggplot(aes(x=ccp3_group, y=ShannonH.Median)) +
@@ -957,9 +867,9 @@ evenness <- meta %>%
 ggarrange(shannon, sobs, evenness, ncol = 3, nrow = 1)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-30-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-31-1.png)<!-- -->
 
-```r
+``` r
 # Perform tests
 shan.stat.test <- wilcox.exact(ShannonH.Median ~ ccp3_group, data=meta, paired=F)
 rich.stat.test <- wilcox.exact(Sobs.Median ~ ccp3_group, data=meta, paired=F)
@@ -976,17 +886,15 @@ data.frame(
 ) %>% knitr::kable()
 ```
 
-
-
-|Measurement       |p.val    |
-|:-----------------|:--------|
-|Shannon Diversity |p = 0.55 |
-|Species Richness  |p = 0.38 |
-|Species Evenness  |p = 0.9  |
+| Measurement       | p.val    |
+|:------------------|:---------|
+| Shannon Diversity | p = 0.55 |
+| Species Richness  | p = 0.38 |
+| Species Evenness  | p = 0.9  |
 
 ##### PCoA
 
-```r
+``` r
 # Need core taxa to save time
 pcoa_otu <- pseq %>% 
   microbiome::transform("compositional") %>%
@@ -1040,11 +948,11 @@ pcoa_plot_df %>%
   theme(text = element_text(size = 12))
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-31-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-32-1.png)<!-- -->
 
 ##### PERMANOVA
 
-```r
+``` r
 # PERMANOVA test using Bray-Curtis distance
 set.seed(007) # Set seed for reproducibility - permutation-based test
 permanova <- adonis2(otu ~ ccp3_group + age + gender + race, data = meta, 
@@ -1058,54 +966,50 @@ permanova %>% as.data.frame() %>%
   knitr::kable(align = 'ccccc')
 ```
 
-
-
-|           | Df | SumOfSqs |  R2  |  F   | p.val |
-|:----------|:--:|:--------:|:----:|:----:|:-----:|
-|ccp3_group | 1  |   0.05   | 0.01 | 0.63 | 0.76  |
-|age        | 1  |   0.10   | 0.02 | 1.24 | 0.25  |
-|gender     | 1  |   0.09   | 0.02 | 1.11 | 0.36  |
-|race       | 4  |   0.32   | 0.08 | 1.05 | 0.41  |
-|Residual   | 46 |   3.54   | 0.86 |  NA  |  NA   |
-|Total      | 53 |   4.14   | 1.00 |  NA  |  NA   |
+|            | Df  | SumOfSqs |  R2  |  F   | p.val |
+|:-----------|:---:|:--------:|:----:|:----:|:-----:|
+| ccp3_group |  1  |   0.05   | 0.01 | 0.63 | 0.76  |
+| age        |  1  |   0.10   | 0.02 | 1.24 | 0.25  |
+| gender     |  1  |   0.09   | 0.02 | 1.11 | 0.36  |
+| race       |  4  |   0.32   | 0.08 | 1.05 | 0.41  |
+| Residual   | 46  |   3.54   | 0.86 |  NA  |  NA   |
+| Total      | 53  |   4.14   | 1.00 |  NA  |  NA   |
 
 **Dispersions Plot**
 
-```r
+``` r
 # Plot dispersion distances for each "group"
 beta_dispersion <- otu %>% vegdist(method = "bray") %>% betadisper(meta$ccp3_group)
 plot(beta_dispersion, hull=FALSE, ellipse=TRUE)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-33-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
 
 **Homogeneity of Dispersons**
 
-```r
+``` r
 # Hypothesis test
 set.seed(007)
 otu %>% vegdist() %>% betadisper(meta$ccp3_group) %>% permutest()
 ```
 
-```
-## 
-## Permutation test for homogeneity of multivariate dispersions
-## Permutation: free
-## Number of permutations: 999
-## 
-## Response: Distances
-##           Df Sum Sq Mean Sq    F N.Perm Pr(>F)
-## Groups     1  0.014 0.01395 1.41    999   0.24
-## Residuals 52  0.514 0.00988
-```
+    ## 
+    ## Permutation test for homogeneity of multivariate dispersions
+    ## Permutation: free
+    ## Number of permutations: 999
+    ## 
+    ## Response: Distances
+    ##           Df Sum Sq Mean Sq    F N.Perm Pr(>F)
+    ## Groups     1  0.014 0.01395 1.41    999   0.24
+    ## Residuals 52  0.514 0.00988
 
-#### {-}  
+#### 
 
 <br>
 
-#### Sputum {.tabset .tabset-pills}
+#### Sputum
 
-```r
+``` r
 # Pick relative abundances (compositional) and sample metadata
 sample_type = "Sputum"
 pseq <- physeq %>% 
@@ -1122,9 +1026,9 @@ otu <- abundances(pseq.rel) %>% t() %>% as.data.frame()
 meta <- meta(pseq.rel) %>% mutate(ccp3 = factor(ccp3, levels = c(0, 1), labels = c("-", "+")))
 ```
 
-##### Alpha Diversity  
+##### Alpha Diversity
 
-```r
+``` r
 # Shannon diversity plot
 shannon <- meta %>%
   ggplot(aes(x=ccp3_group, y=ShannonH.Median)) +
@@ -1177,9 +1081,9 @@ evenness <- meta %>%
 ggarrange(shannon, sobs, evenness, ncol = 3, nrow = 1)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-36-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
 
-```r
+``` r
 # Perform tests
 shan.stat.test <- wilcox.exact(ShannonH.Median ~ ccp3_group, data=meta, paired=F)
 rich.stat.test <- wilcox.exact(Sobs.Median ~ ccp3_group, data=meta, paired=F)
@@ -1196,17 +1100,15 @@ data.frame(
 ) %>% knitr::kable()
 ```
 
-
-
-|Measurement       |p.val    |
-|:-----------------|:--------|
-|Shannon Diversity |p = 0.49 |
-|Species Richness  |p = 0.53 |
-|Species Evenness  |p = 0.77 |
+| Measurement       | p.val    |
+|:------------------|:---------|
+| Shannon Diversity | p = 0.49 |
+| Species Richness  | p = 0.53 |
+| Species Evenness  | p = 0.77 |
 
 ##### PCoA
 
-```r
+``` r
 # Need core taxa to save time
 pcoa_otu <- pseq %>% 
   microbiome::transform("compositional") %>%
@@ -1260,11 +1162,11 @@ pcoa_plot_df %>%
   theme(text = element_text(size = 12))
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-37-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-38-1.png)<!-- -->
 
 ##### PERMANOVA
 
-```r
+``` r
 # PERMANOVA test using Bray-Curtis distance
 set.seed(007) # Set seed for reproducibility - permutation-based test
 permanova <- adonis2(otu ~ ccp3_group + age + gender + race, data = meta, 
@@ -1278,45 +1180,41 @@ permanova %>% as.data.frame() %>%
   knitr::kable(align = 'ccccc')
 ```
 
-
-
-|           | Df | SumOfSqs |  R2  |  F   | p.val |
-|:----------|:--:|:--------:|:----:|:----:|:-----:|
-|ccp3_group | 1  |   0.03   | 0.00 | 0.20 | 1.00  |
-|age        | 1  |   0.14   | 0.02 | 0.98 | 0.43  |
-|gender     | 1  |   0.17   | 0.03 | 1.18 | 0.27  |
-|race       | 4  |   0.54   | 0.09 | 0.94 | 0.55  |
-|Residual   | 38 |   5.43   | 0.86 |  NA  |  NA   |
-|Total      | 45 |   6.30   | 1.00 |  NA  |  NA   |
+|            | Df  | SumOfSqs |  R2  |  F   | p.val |
+|:-----------|:---:|:--------:|:----:|:----:|:-----:|
+| ccp3_group |  1  |   0.03   | 0.00 | 0.20 | 1.00  |
+| age        |  1  |   0.14   | 0.02 | 0.98 | 0.43  |
+| gender     |  1  |   0.17   | 0.03 | 1.18 | 0.27  |
+| race       |  4  |   0.54   | 0.09 | 0.94 | 0.55  |
+| Residual   | 38  |   5.43   | 0.86 |  NA  |  NA   |
+| Total      | 45  |   6.30   | 1.00 |  NA  |  NA   |
 
 **Dispersions Plot**
 
-```r
+``` r
 # Plot dispersion distances for each "group"
 beta_dispersion <- otu %>% vegdist(method = "bray") %>% betadisper(meta$ccp3_group)
 plot(beta_dispersion, hull=FALSE, ellipse=TRUE)
 ```
 
-![](altra-eda---inference_files/figure-html/unnamed-chunk-39-1.png)<!-- -->
+![](altra-inference_files/figure-gfm/unnamed-chunk-40-1.png)<!-- -->
 
 **Homogeneity of Dispersons**
 
-```r
+``` r
 # Hypothesis test
 set.seed(007)
 otu %>% vegdist() %>% betadisper(meta$ccp3_group) %>% permutest()
 ```
 
-```
-## 
-## Permutation test for homogeneity of multivariate dispersions
-## Permutation: free
-## Number of permutations: 999
-## 
-## Response: Distances
-##           Df Sum Sq Mean Sq    F N.Perm Pr(>F)
-## Groups     1  0.003 0.00253 0.21    999   0.66
-## Residuals 44  0.529 0.01203
-```
+    ## 
+    ## Permutation test for homogeneity of multivariate dispersions
+    ## Permutation: free
+    ## Number of permutations: 999
+    ## 
+    ## Response: Distances
+    ##           Df Sum Sq Mean Sq    F N.Perm Pr(>F)
+    ## Groups     1  0.003 0.00253 0.21    999   0.66
+    ## Residuals 44  0.529 0.01203
 
-#### {-}
+#### 

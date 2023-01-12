@@ -1,12 +1,8 @@
 ---
-title: "ALTRA Microbiome Analysis"
-output:
-  html_document:
-    keep_md: true
-    toc: true
-    toc_float: true
-    code_folding: hide
+output: rmarkdown::github_document
 ---
+
+# ALTRA Microbiome Analysis
 
 <br>
 ```{r setup, include=FALSE}
@@ -59,169 +55,25 @@ abbrev_taxa <- function(physeq) {
       !is.na(Phylum) ~ Phylum,
       TRUE ~ Domain)) %>%
     select(lowest_cat) %>% pull()
-  return(short_names)
+  return(short_names)}
+
+# Violin plot of alpha diversity measurements by CCP grouping
+plot_alpha_div <- function(metadata, y, title) {
+  plot <- metadata %>%
+    mutate(group_sampletype = paste(ccp3_group, sample_type_16S, sep = "_")) %>%
+    ggplot(aes_string(x="sample_type_16S", y=y)) +
+    geom_violin(aes(fill = group_sampletype), color = "gray5", lwd = 0.6) +
+    facet_grid(cols=vars(ccp3_group)) +
+    geom_boxplot(width = 0.1, fill = "white", color = "gray5") +
+    geom_line(aes(group = sample_id), alpha = 0.5) +
+    ggtitle(title) +
+    labs(x = "", y = title) +
+    theme_bw() +
+    scale_fill_brewer(palette = "Paired") +
+    theme(plot.title = element_text(hjust=0.5), legend.position = "none")
+  return(plot)
 }
-```
 
-## Introduction
-
-
-## The Data  
-```{r}
-# Import data
-data <- paste(getwd(), "/../data/ALTRA_clinical&16S.merged.19-Dec-2022.analysis_samples.csv", sep="") %>% 
-  read_delim(delim = ",") %>%
-  mutate(rowname = ifelse(sample_type_16S == "Stool", paste(rowname, "F", sep = ""), rowname)) %>%
-  column_to_rownames("rowname")
-
-# OTU table
-otu_table <- data %>% select(contains("Bacteria")) %>%
-  t() %>% otu_table(taxa_are_rows = T)
-
-# Sample metadata
-metadata <- data %>% select(-contains("Bacteria")) %>%
-  select(sample_id, ccp3_group, ccp3, everything())
-
-# Taxonomy matrix
-otu_names <- otu_table %>% as.data.frame() %>% rownames()
-tax_levels <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species")
-otu_tax_split <- sapply(otu_names, FUN=function(x) strsplit(x, "/"))
-tax_table <- plyr::ldply(otu_tax_split, rbind)[-1] %>%
-  set_rownames(otu_names) %>%
-  set_colnames(tax_levels) %>%
-  as.matrix()
-
-# Phyloseq object
-physeq <- phyloseq(otu_table(otu_table), tax_table(tax_table), sample_data(metadata))
-```
-
-### Missing Data  
-```{r, fig.dim=c(8, 4)}
-data %>% select(-contains("Bacteria/")) %>% vis_miss() +
-  scale_fill_manual(values = c("gray15", "darkgoldenrod")) +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = 30, hjust = 0)) +
-  guides(fill = guide_legend(title = "Missing"))
-```
-<br>
-<br>
-
-### Subject Counts
-```{r}
-# Subject counts by grouping - matches up with what is reported by Kevin Deane's team
-subject_counts <- data %>% select(sample_id, ccp3_group) %>% 
-  unique() %>% select(ccp3_group) %>% table() %>% as.data.frame() %>%
-  column_to_rownames(".") %>% dplyr::rename("All Subjects" = "Freq") %>% t()
-
-stool_counts <- data %>% filter(sample_type_16S == "Stool") %>% select(sample_id, ccp3_group) %>% 
-  select(ccp3_group) %>% table() %>% as.data.frame() %>%
-  column_to_rownames(".") %>% dplyr::rename("Stool" = "Freq") %>% t()
-
-sputum_counts <- data %>% filter(sample_type_16S == "Sputum") %>% select(sample_id, ccp3_group) %>% 
-  select(ccp3_group) %>% table() %>% as.data.frame() %>%
-  column_to_rownames(".") %>% dplyr::rename("Sputum" = "Freq") %>% t()
-
-rbind(subject_counts, stool_counts, sputum_counts) %>% knitr::kable()
-```
-
-### Table 1 {.tabset .tabset-pills}
-#### Stool
-```{r}
-# Table 1 (source: https://cran.r-project.org/web/packages/tableone/vignettes/introduction.html)
-vars <- c("age", "gender", "race", "bmi", "ever_smoke")
-cat_vars <- c("gender", "race", "ever_smoke")
-table1 <- CreateTableOne(
-  vars = vars, factorVars = cat_vars, strata = c("ccp3_group"), data = data %>% filter(sample_type_16S == "Stool"))
-print(table1, print = F, nonnormal = T, minMax = F, contDigits=0) %>% 
-  as.data.frame() %>% 
-  select(-test, -p) %>%
-  knitr::kable(booktabs = T, align = "ccccc")
-```
-
-#### Sputum
-```{r}
-# Table 1 (source: https://cran.r-project.org/web/packages/tableone/vignettes/introduction.html)
-vars <- c("age", "gender", "race", "bmi", "ever_smoke")
-cat_vars <- c("gender", "race", "ever_smoke")
-table1 <- CreateTableOne(
-  vars = vars, factorVars = cat_vars, strata = c("ccp3_group"), data = data %>% filter(sample_type_16S == "Sputum"))
-print(table1, print = F, nonnormal = T, minMax = F, contDigits=0) %>% 
-  as.data.frame() %>% 
-  select(-test, -p) %>%
-  knitr::kable(booktabs = T, align = "ccccc")
-```
-
-### {-}
-
-<br>
-<br>
-
-## EDA
-### Alpha Diversity by CCP-Group {.tabset .tabset-pills}
-The violin/boxplots below show the distributions of various alpha diversity measurements, stratified by CCP-group and sample type.  
-<br>
-
-#### Shannon Diversity
-```{r}
-# Shannon diversity plot
-metadata %>%
-  mutate(group_sampletype = paste(ccp3_group, sample_type_16S, sep = "_")) %>%
-  ggplot(aes(x=sample_type_16S, y=ShannonH.Median)) +
-  geom_violin(aes(fill = group_sampletype), color = "gray5", lwd = 0.6) +
-  facet_grid(cols=vars(ccp3_group)) +
-  geom_boxplot(width = 0.1, fill = "white", color = "gray5") +
-  geom_line(aes(group = sample_id), alpha = 0.5) +
-  ggtitle("Shannon Diversity") +
-  labs(x = "", y = "Shannon Diversity") +
-  theme_bw() +
-  scale_fill_brewer(palette = "Paired") +
-  theme(plot.title = element_text(hjust=0.5),
-        legend.position = "none")
-```
-
-#### Species Richness
-```{r}
-# Species richness
-metadata %>%
-  mutate(group_sampletype = paste(ccp3_group, sample_type_16S, sep = "_")) %>%
-  ggplot(aes(x=sample_type_16S, y=Sobs.Median)) +
-  geom_violin(aes(fill = group_sampletype), color = "gray5", lwd = 0.6) +
-  facet_grid(cols=vars(ccp3_group)) +
-  geom_boxplot(width = 0.1, fill = "white", color = "gray5") +
-  geom_line(aes(group = sample_id), alpha = 0.5) +
-  ggtitle("Species Richness") +
-  labs(x = "", y = "Species Richness") +
-  theme_bw() +
-  scale_fill_brewer(palette = "Paired") +
-  theme(plot.title = element_text(hjust=0.5),
-        legend.position = "none")
-```
-
-#### Species Evenness
-```{r}
-# Species evenness
-metadata %>%
-  mutate(group_sampletype = paste(ccp3_group, sample_type_16S, sep = "_")) %>%
-  ggplot(aes(x=sample_type_16S, y=ShannonE.Median)) +
-  geom_violin(aes(fill = group_sampletype), color = "gray5", lwd = 0.6) +
-  facet_grid(cols=vars(ccp3_group)) +
-  geom_boxplot(width = 0.1, fill = "white", color = "gray5") +
-  geom_line(aes(group = sample_id), alpha = 0.5) +
-  ggtitle("Species Evenness") +
-  labs(x = "", y = "Species Evenness") +
-  theme_bw() +
-  scale_fill_brewer(palette = "Paired") +
-  theme(plot.title = element_text(hjust=0.5),
-        legend.position = "none")
-```
-
-### Community Compositions {.tabset .tabset-pills}
-Below are stacked bar charts showing community compositions. Bars are ordered by community similarity, as determined through hierarchical clustering (using Bray-Curtis distance). Squares at the top of each bar represent CCP group (see legend below). The top 15 taxa observed among all samples are included - rarer taxa are grouped into the "Other" group. Taxa that were did meet detection criteria (1e-4% relative abundance in at least 10% of samples) are not included, which is why not all stacked bar charts reach 100%.  
-<br>
-
-![](/Users/bgraham/Github/altra/inference/ccp_label.png){#id .class width=20% height=5%}
-
-```{r, include = F}
 composition_barchart <- function(ra.physeq, marker_size) {
   
   # physeq --> df
@@ -312,21 +164,119 @@ composition_barchart <- function(ra.physeq, marker_size) {
           panel.grid.major.x = element_blank(),
           panel.grid.minor.x = element_blank(),
           panel.grid.minor.y = element_blank(),
-          panel.border = element_blank())
-}
+          panel.border = element_blank())}
 ```
+
+## Introduction
+
+
+## The Data  
+```{r}
+# Import data
+data <- paste(getwd(), "/../data/ALTRA_clinical&16S.merged.19-Dec-2022.analysis_samples.csv", sep="") %>% 
+  read_delim(delim = ",") %>%
+  mutate(rowname = ifelse(sample_type_16S == "Stool", paste(rowname, "F", sep = ""), rowname)) %>%
+  column_to_rownames("rowname")
+
+# OTU table
+otu_table <- data %>% select(contains("Bacteria")) %>%
+  t() %>% otu_table(taxa_are_rows = T)
+
+# Sample metadata
+metadata <- data %>% select(-contains("Bacteria")) %>%
+  select(sample_id, ccp3_group, ccp3, everything())
+
+# Taxonomy matrix
+otu_names <- otu_table %>% as.data.frame() %>% rownames()
+tax_levels <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+otu_tax_split <- sapply(otu_names, FUN=function(x) strsplit(x, "/"))
+tax_table <- plyr::ldply(otu_tax_split, rbind)[-1] %>%
+  set_rownames(otu_names) %>%
+  set_colnames(tax_levels) %>%
+  as.matrix()
+
+# Phyloseq object
+physeq <- phyloseq(otu_table(otu_table), tax_table(tax_table), sample_data(metadata))
+```
+
+### Missing Data  
+```{r, fig.dim=c(8, 4)}
+# Visualize missingness
+data %>% select(-contains("Bacteria/")) %>% vis_miss() +
+  scale_fill_manual(values = c("gray15", "darkgoldenrod")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 0)) +
+  guides(fill = guide_legend(title = "Missing"))
+```
+<br>
+<br>
+
+### Subject Counts
+```{r}
+# Subject counts by grouping
+# All samples
+subject_counts <- data %>% select(sample_id, ccp3_group) %>% 
+  unique() %>% select(ccp3_group) %>% table() %>% as.data.frame() %>%
+  column_to_rownames(".") %>% dplyr::rename("All Subjects" = "Freq") %>% t()
+
+# Stool samples
+stool_counts <- data %>% filter(sample_type_16S == "Stool") %>% select(sample_id, ccp3_group) %>% 
+  select(ccp3_group) %>% table() %>% as.data.frame() %>%
+  column_to_rownames(".") %>% dplyr::rename("Stool" = "Freq") %>% t()
+
+# Sputum samples
+sputum_counts <- data %>% filter(sample_type_16S == "Sputum") %>% select(sample_id, ccp3_group) %>% 
+  select(ccp3_group) %>% table() %>% as.data.frame() %>%
+  column_to_rownames(".") %>% dplyr::rename("Sputum" = "Freq") %>% t()
+
+# Output table
+rbind(subject_counts, stool_counts, sputum_counts) %>% knitr::kable()
+```
+
+<br>
+<br>
+
+## EDA
+### Alpha Diversity by CCP-Group
+The violin/boxplots below show the distributions of various alpha diversity measurements, stratified by CCP-group and sample type.  
+<br>
+
+#### Shannon Diversity
+```{r}
+plot_alpha_div(metadata, y="ShannonH.Median", title="Shannon Diversity")
+```
+
+#### Species Richness
+```{r}
+plot_alpha_div(metadata, y="Sobs.Median", title="Species Richness")
+```
+
+#### Species Evenness
+```{r}
+plot_alpha_div(metadata, y="ShannonE.Median", title="Species Evenness")
+```
+
+### Community Compositions {.tabset .tabset-pills}
+Below are stacked bar charts showing community compositions. Bars are ordered by community similarity, as determined through hierarchical clustering (using Bray-Curtis distance). Squares at the top of each bar represent CCP group (see legend below). The top 15 taxa observed among all samples are included - rarer taxa are grouped into the "Other" group. Taxa that were did meet detection criteria (1e-4% relative abundance in at least 10% of samples) are not included, which is why not all stacked bar charts reach 100%.  
+<br>
+
+![](/Users/bgraham/Github/altra/inference/ccp_label.png){#id .class width=20% height=5%}
 
 #### Stool, Species-Level  
 ```{r}
 sample_type = "Stool"
 ccp3_groups = c("NegControl", "PosNonconverter", "PosConverter")
 
+# Select 
 ra.physeq <- physeq %>%
     microbiome::transform("compositional") %>%         # Transform to RA
     subset_samples(sample_type_16S == sample_type) %>% # Pick sample type
     subset_samples(ccp3_group %in% ccp3_groups) %>%    # Choose groups
     core(detection=1e-6, prevalence=0.10)              # Pick the core
+```
 
+```{r}
+# Display compositional barchart
 composition_barchart(ra.physeq=ra.physeq, marker_size=2)
 ```
 
@@ -344,16 +294,21 @@ pheatmap.df <- core.physeq %>%
 
 # Pheatmap annotations
 annotation <- ra.physeq %>% sample_data() %>% as_tibble() %>% as.data.frame() %>%
-  select(ccp3, contains("95_pos")) %>%
-  mutate(sp_rf_ig_m_95_pos = ifelse(sp_rf_ig_m_95_pos == 0, "Negative", "Positive"),
-         sp_rf_ig_a_95_pos = ifelse(sp_rf_ig_a_95_pos == 0, "Negative", "Positive"),
-         sp_ccp_ig_a_95_pos = ifelse(sp_ccp_ig_a_95_pos == 0, "Negative", "Positive"),
-         sp_ccp_ig_g_95_pos = ifelse(sp_ccp_ig_g_95_pos == 0, "Negative", "Positive")) %>%
+  select(CCP = ccp3, contains("95_pos")) %>%
+  mutate(
+    CCP = ifelse(CCP == 0, "-", "+"),
+    sp_rf_ig_m_95_pos = ifelse(sp_rf_ig_m_95_pos == 0, "-", "+"),
+    sp_rf_ig_a_95_pos = ifelse(sp_rf_ig_a_95_pos == 0, "-", "+"),
+    sp_ccp_ig_a_95_pos = ifelse(sp_ccp_ig_a_95_pos == 0, "-", "+"),
+    sp_ccp_ig_g_95_pos = ifelse(sp_ccp_ig_g_95_pos == 0, "-", "+")) %>%
   set_rownames(colnames(t(pheatmap.df)))
 
+# Set colors
 annotation_color = list(ccp3 = c(CCPminus = "gray10", CCPplus = "darkgoldenrod"))
+```
 
-# Separately displaying dendrogram
+```{r}
+# Display pheatmap
 pheatmap(t(pheatmap.df), legend = F, color = viridis(100),
          cluster_cols = cluster.df %>% vegdist(method = "bray") %>% hclust(method = "ward.D2"),
          annotation = annotation, annotation_colors = annotation_color,
@@ -370,7 +325,10 @@ ra.physeq <- physeq %>%
     subset_samples(sample_type_16S == sample_type) %>% # Pick sample type
     subset_samples(ccp3_group %in% ccp3_groups) %>%    # Choose groups
     core(detection=1e-6, prevalence=0.10)           # Pick the core
-      
+```
+
+```{r}
+# Display compositional barchart
 composition_barchart(ra.physeq=ra.physeq, marker_size=2.8)
 ```
 
@@ -380,31 +338,36 @@ cluster.df <- ra.physeq %>%
   otu_table(taxa_are_rows = TRUE) %>% t() %>% as.data.frame() %>% 
   set_colnames(abbrev_taxa(ra.physeq))
 
+# Create pheatmap
 core.physeq <- ra.physeq %>% core(detection=1/100, prevalence=25/100)
 pheatmap.df <- core.physeq %>%
   otu_table() %>% t() %>% as.data.frame() %>%
   set_colnames(abbrev_taxa(core.physeq))
 
-# pheatmap annotations
+# # Pheatmap annotations
 annotation <- ra.physeq %>% sample_data() %>% as_tibble() %>% as.data.frame() %>%
-  select(ccp3, contains("95_pos")) %>%
-  mutate(sp_rf_ig_m_95_pos = ifelse(sp_rf_ig_m_95_pos == 0, "Negative", "Positive"),
-         sp_rf_ig_a_95_pos = ifelse(sp_rf_ig_a_95_pos == 0, "Negative", "Positive"),
-         sp_ccp_ig_a_95_pos = ifelse(sp_ccp_ig_a_95_pos == 0, "Negative", "Positive"),
-         sp_ccp_ig_g_95_pos = ifelse(sp_ccp_ig_g_95_pos == 0, "Negative", "Positive")) %>%
+  select(CCP = ccp3, contains("95_pos")) %>%
+  mutate(
+    CCP = ifelse(CCP == 0, "-", "+"),
+    sp_rf_ig_m_95_pos = ifelse(sp_rf_ig_m_95_pos == 0, "-", "+"),
+    sp_rf_ig_a_95_pos = ifelse(sp_rf_ig_a_95_pos == 0, "-", "+"),
+    sp_ccp_ig_a_95_pos = ifelse(sp_ccp_ig_a_95_pos == 0, "-", "+"),
+    sp_ccp_ig_g_95_pos = ifelse(sp_ccp_ig_g_95_pos == 0, "-", "+")) %>%
   set_rownames(colnames(t(pheatmap.df)))
 
-annotation_color = list(
-    ccp3 = c(CCPminus = "gray10", CCPplus = "darkgoldenrod"))
-
-# Separately displaying dendrogram
-pheatmap(t(pheatmap.df), legend = F, color = viridis(100),
-         cluster_cols = cluster.df %>% vegdist(method = "bray") %>% hclust(method = "ward.D2"),
-         annotation = annotation, annotation_colors = annotation_color,
-         border_color = NA, cluster_rows = F, show_colnames = F)
+# Set colors
+annotation_color = list(ccp3 = c(CCPminus = "gray10", CCPplus = "darkgoldenrod"))
 ```
 
-### {-}
+```{r}
+# Display pheatmap
+pheatmap(
+  t(pheatmap.df), legend = F, color = viridis(100),
+  cluster_cols = cluster.df %>% vegdist(method = "bray") %>% hclust(method = "ward.D2"),
+  annotation = annotation, annotation_colors = annotation_color,
+  border_color = NA, cluster_rows = F, show_colnames = F)
+```
+
 <br>
 <br>
 
